@@ -21,6 +21,7 @@
 #include "chprintf.h"
 #include "shell.h"
 #include "stmdrivers/stm32f429i_discovery_sdram.h"
+#include "stmdrivers/stm32f4xx_fmc.h"
 
 #define IS42S16400J_SIZE             0x400000
 
@@ -114,6 +115,187 @@ static void cmd_test(BaseSequentialStream *chp, int argc, char *argv[]) {
   chThdWait(tp);
 }
 
+static void cmd_reset(BaseSequentialStream *chp, int argc, char *argv[]) {
+  (void)argv;
+  if (argc > 0) {
+    chprintf(chp, "Usage: reset\r\n");
+    return;
+  }
+
+  chprintf(chp, "Will reset in 200ms\r\n");
+  chThdSleepMilliseconds(200);
+  NVIC_SystemReset();
+}
+
+static void cmd_write(BaseSequentialStream *chp, int argc, char *argv[]) {
+  uint32_t counter = 0;
+  uint8_t ubWritedata_8b = 0x3C;
+  uint32_t uwReadwritestatus = 0;
+  TimeMeasurement tm;
+
+
+  (void)argv;
+  if (argc > 0) {
+    chprintf(chp, "Usage: write\r\n");
+    return;
+  }
+
+  tmObjectInit(&tm);
+
+  tmStartMeasurement(&tm);
+
+  /* Write data value to all SDRAM memory */
+  for (counter = 0; counter < IS42S16400J_SIZE; counter++)
+  {
+    *(__IO uint8_t*) (SDRAM_BANK_ADDR + counter) = (uint8_t)(ubWritedata_8b + counter);
+  }
+
+  tmStopMeasurement(&tm);
+  uint32_t write_ms = RTT2MS(tm.last);
+
+  if (!uwReadwritestatus) {
+    chprintf(chp, "SDRAM written in %dms.\r\n", write_ms);
+  }
+
+}
+
+static void cmd_erase(BaseSequentialStream *chp, int argc, char *argv[]) {
+  uint32_t counter = 0;
+  uint32_t uwReadwritestatus = 0;
+  TimeMeasurement tm;
+
+
+  (void)argv;
+  if (argc > 0) {
+    chprintf(chp, "Usage: erase\r\n");
+    return;
+  }
+
+  tmObjectInit(&tm);
+
+  tmStartMeasurement(&tm);
+
+  /* Write data value to all SDRAM memory */
+  /* Erase SDRAM memory */
+  for (counter = 0; counter < IS42S16400J_SIZE; counter++)
+  {
+    *(__IO uint8_t*) (SDRAM_BANK_ADDR + counter) = (uint8_t)0x0;
+  }
+
+  tmStopMeasurement(&tm);
+  uint32_t write_ms = RTT2MS(tm.last);
+
+  if (!uwReadwritestatus) {
+    chprintf(chp, "SDRAM erased in %dms.\r\n", write_ms);
+  }
+
+}
+
+static void cmd_selfrefresh(BaseSequentialStream *chp, int argc, char *argv[]) {
+  (void)argv;
+
+  FMC_SDRAMCommandTypeDef FMC_SDRAMCommandStructure;
+
+  if (argc > 0) {
+    chprintf(chp, "Usage: selfrefresh\r\n");
+    return;
+  }
+
+  /* Program a self-refresh mode command */
+  FMC_SDRAMCommandStructure.FMC_CommandMode = FMC_Command_Mode_Selfrefresh;
+  FMC_SDRAMCommandStructure.FMC_CommandTarget = FMC_Command_Target_bank2;
+  FMC_SDRAMCommandStructure.FMC_AutoRefreshNumber = 1;
+  FMC_SDRAMCommandStructure.FMC_ModeRegisterDefinition = 0;
+
+  /* Send the command */
+  FMC_SDRAMCmdConfig(&FMC_SDRAMCommandStructure);
+
+  /* Wait until the SDRAM controller is ready */
+  while(FMC_GetFlagStatus(FMC_Bank2_SDRAM, FMC_FLAG_Busy) != RESET) {
+  }
+
+  /* Check the bank mode status */
+  if(FMC_GetModeStatus(FMC_Bank2_SDRAM) != FMC_SelfRefreshMode_Status) {
+    chprintf(chp, "SDRAM is not in self refresh mode, command FAILED.\r\n");
+  } else {
+    chprintf(chp, "SDRAM is in self refresh mode.\r\n");
+  }
+
+}
+
+static void cmd_normal(BaseSequentialStream *chp, int argc, char *argv[]) {
+  (void)argv;
+
+  FMC_SDRAMCommandTypeDef FMC_SDRAMCommandStructure;
+
+  if (argc > 0) {
+    chprintf(chp, "Usage: normal\r\n");
+    return;
+  }
+
+  /* Program a self-refresh mode command */
+  FMC_SDRAMCommandStructure.FMC_CommandMode = FMC_Command_Mode_normal;
+  FMC_SDRAMCommandStructure.FMC_CommandTarget = FMC_Command_Target_bank2;
+  FMC_SDRAMCommandStructure.FMC_AutoRefreshNumber = 1;
+  FMC_SDRAMCommandStructure.FMC_ModeRegisterDefinition = 0;
+
+  /* Send the command */
+  FMC_SDRAMCmdConfig(&FMC_SDRAMCommandStructure);
+
+  /* Wait until the SDRAM controller is ready */
+  while(FMC_GetFlagStatus(FMC_Bank2_SDRAM, FMC_FLAG_Busy) != RESET) {
+  }
+
+  /* Check the bank mode status */
+  if(FMC_GetModeStatus(FMC_Bank2_SDRAM) != FMC_NormalMode_Status) {
+    chprintf(chp, "SDRAM is not in normal mode, command FAILED.\r\n");
+  } else {
+    chprintf(chp, "SDRAM is in normal mode.\r\n");
+  }
+
+}
+
+static void cmd_check(BaseSequentialStream *chp, int argc, char *argv[]) {
+  uint32_t counter = 0;
+  uint8_t ubWritedata_8b = 0x3C, ubReaddata_8b = 0;
+  uint32_t uwReadwritestatus = 0;
+  TimeMeasurement tm;
+
+
+  (void)argv;
+  if (argc > 0) {
+    chprintf(chp, "Usage: check\r\n");
+    return;
+  }
+
+  tmObjectInit(&tm);
+
+  tmStartMeasurement(&tm);
+
+  /* Read back SDRAM memory and check content correctness*/
+  counter = 0;
+  uwReadwritestatus = 0;
+  while ((counter < IS42S16400J_SIZE) && (uwReadwritestatus == 0))
+  {
+    ubReaddata_8b = *(__IO uint8_t*)(SDRAM_BANK_ADDR + counter);
+    if ( ubReaddata_8b != (uint8_t)(ubWritedata_8b + counter))
+    {
+      uwReadwritestatus = 1;
+      chprintf(chp, "Error at %d, expected %d but read %d.\r\n", counter, ubWritedata_8b + counter, ubReaddata_8b);
+    }
+    counter++;
+  }
+
+  tmStopMeasurement(&tm);
+  uint32_t check_ms = RTT2MS(tm.last);
+
+  //FIXME time this
+  if (!uwReadwritestatus) {
+    chprintf(chp, "SDRAM read and check completed successfully in %dms.\r\n", check_ms);
+  }
+
+}
+
 static void cmd_sdram(BaseSequentialStream *chp, int argc, char *argv[]) {
   uint32_t counter = 0;
   uint8_t ubWritedata_8b = 0x3C, ubReaddata_8b = 0;
@@ -187,6 +369,12 @@ static const ShellCommand commands[] = {
   {"threads", cmd_threads},
   {"test", cmd_test},
   {"sdram", cmd_sdram},
+  {"reset", cmd_reset},
+  {"write", cmd_write},
+  {"check", cmd_check},
+  {"erase", cmd_erase},
+  {"selfrefresh", cmd_selfrefresh},
+  {"normal", cmd_normal},
   {NULL, NULL}
 };
 
