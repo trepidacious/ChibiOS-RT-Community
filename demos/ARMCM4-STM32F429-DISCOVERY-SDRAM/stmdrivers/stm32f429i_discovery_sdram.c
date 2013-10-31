@@ -196,9 +196,13 @@ void SDRAM_InitSequence(void)
   /* Send the command */
   FMC_SDRAMCmdConfig(&FMC_SDRAMCommandStructure);  
   
+  //In the ST example, this is 100ms, but the 429 RM says 100us is typical, and
+  //the ISSI datasheet confirms this. 1ms seems plenty, and is much shorter than
+  //refresh interval, meaning we won't risk losing contents if the SDRAM is in self-refresh
+  //mode
 /* Step 4 --------------------------------------------------------------------*/
-  /* Insert 100 ms delay */
-  chThdSleepMilliseconds(100);
+  /* Insert 1 ms delay */
+  chThdSleepMilliseconds(1);
     
 /* Step 5 --------------------------------------------------------------------*/
   /* Configure a PALL (precharge all) command */ 

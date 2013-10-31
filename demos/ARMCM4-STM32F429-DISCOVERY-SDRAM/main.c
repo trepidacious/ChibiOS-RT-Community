@@ -355,9 +355,6 @@ static void cmd_sdram(BaseSequentialStream *chp, int argc, char *argv[]) {
     counter++;
   }
 
-
-
-  //FIXME time this
   if (!uwReadwritestatus) {
     chprintf(chp, "SDRAM test completed successfully, writing entire memory took %dms, reading it took %dms.\r\n", write_ms, read_ms);
   }
